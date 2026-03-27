@@ -11,6 +11,39 @@ python -m bias_dynamics.main run-all --config config/experiment_config.yaml --ou
 python -m bias_dynamics.main bias-injection --config config/experiment_config.yaml --output-dir outputs
 ```
 
+## 命令行覆盖参数（方便 SLURM）
+
+你可以临时覆盖配置里的关键参数（seed、iteration、method 等）：
+
+```bash
+python -m bias_dynamics.main \
+  --seed 42 \
+  --iterations 5 \
+  --runs-per-method 1 \
+  --methods self_distill \
+  run-all --config config/experiment_config.yaml --output-dir outputs/self_distill_seed42
+```
+
+## 在 SLURM 上跑
+
+### 1) 批量提交（sbatch）
+
+```bash
+bash scripts/submit_bias_dynamics_jobs.sh
+```
+
+脚本会按 `(experiment_type × method × seed)` 提交任务，日志在 `logs/`，输出在 `outputs/slurm/`。
+
+### 2) 交互式/单任务（srun）
+
+```bash
+# iterative
+bash scripts/run_bias_dynamics_srun.sh iterative self_distill 42
+
+# bias injection
+bash scripts/run_bias_dynamics_srun.sh bias_injection self_distill 42
+```
+
 ## 输出
 
 每轮训练都会输出统一 JSON 结构（包含 category-level social bias breakdown）：
