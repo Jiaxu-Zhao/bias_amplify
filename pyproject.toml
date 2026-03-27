@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bias-dynamics"
+version = "0.1.0"
+description = "Bias dynamics experiment harness"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+eval = [
+  "transformers>=4.44.0",
+  "datasets>=2.20.0",
+  "torch>=2.1.0"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
