@@ -9,6 +9,10 @@ BEFORE_MODEL="${1:?need before model path}"
 AFTER_MODEL="${2:?need after model path}"
 METHOD_NAME="${3:-self_distill}"
 
+# At least two bias + two capability benchmarks (standard public evals)
+BIAS_TASKS="bbq,crows_pairs"
+CAPABILITY_TASKS="mmlu,hellaswag"
+
 PARTITION="normal"
 ACCOUNT="aa010"
 GPUS=1
@@ -44,7 +48,8 @@ python -u -m bias_dynamics.real_eval \
   --before-model "${BEFORE_MODEL}" \
   --after-model "${AFTER_MODEL}" \
   --output-json "${OUT_DIR}/before_after_eval.json" \
-  --min-variants-per-category 50
+  --bias-tasks "${BIAS_TASKS}" \
+  --capability-tasks "${CAPABILITY_TASKS}"
 
 echo "DONE: \\$(date)"
 SBATCH_EOF

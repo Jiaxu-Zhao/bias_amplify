@@ -1,95 +1,90 @@
 # Bias Dynamics in Self-Improving Language Models
 
-该项目实现了一个可复现实验框架，用于研究不同训练范式（SFT / RLHF(PPO-like) / DPO / Self-distillation）下 **social bias**（gender / race / religion / profession）的动态变化、迭代放大和与性能的权衡。
+这个仓库现在把“训练前后评测”收敛到 **标准 benchmark**，避免自创指标。
 
-> 说明：`self_distill` 在本项目中按 **OPSD-style**（on-policy self-distillation）建模，参考：<https://github.com/siyan-zhao/OPSD>
+## 核心实验原则（保证可比性）
 
-## 快速开始
+你提的要求是对的：
+- 对于 SFT / DPO / RLHF / self-distill 的对比，必须尽量使用 **同一来源数据**。
+- 不同方法如果格式不同，也应由同一 source dataset 转换成不同 view，而不是换数据来源。
+
+本仓库已提供对应协议：`config/comparable_training_protocol.json`。
+
+## 关键回答：模型是否从 Hugging Face 加载？
+
+**是的。** 评测通过 `lm-eval-harness` 的 `--model hf` 后端从 Hugging Face 加载模型。你传入的 `--before-model` 和 `--after-model` 都可以是 HF model id。
+
+私有模型：
 
 ```bash
-python -m bias_dynamics.main run-all --config config/experiment_config.yaml --output-dir outputs
-python -m bias_dynamics.main bias-injection --config config/experiment_config.yaml --output-dir outputs
+export HF_TOKEN=hf_xxx
 ```
 
-## 评测训练前后模型（真实 LLM）
+## 为什么选这些训练数据源（可写进论文方法部分）
 
-你提到要评测“训练方法前后偏见变化 + 语言模型能力变化”，本仓库已提供：
+我们推荐两组“单一来源”实验（每组内部四种训练方法共享同一来源）：
+
+1. `HuggingFaceH4/ultrafeedback_binarized`
+   - 有 prompt + chosen/rejected，天然支持 SFT/DPO/RLHF。
+   - self-distill 使用同一 prompt 池，保证输入分布一致。
+
+2. `Anthropic/hh-rlhf`
+   - Helpful-Harmless 偏好对，适合对齐训练研究。
+   - 同样可从同一来源构造四种训练 view。
+
+3. `McGill-NLP/stereoset`（新增：明确包含社会刻板偏见）
+   - 包含 stereotype / anti-stereotype 对，覆盖 gender / race / religion 等维度。
+   - 可以直接构造：chosen=anti-stereotype, rejected=stereotype，用于 bias-sensitive 训练与放大分析。
+
+## 可比性数据构造（最关键）
+
+运行：
+
+```bash
+python scripts/build_comparable_splits.py \
+  --protocol config/comparable_training_protocol.json \
+  --output-dir data/comparable \
+  --seed 42
+```
+
+每个实验会输出：
+- `sft.jsonl`（prompt + chosen）
+- `dpo.jsonl`（prompt + chosen/rejected）
+- `rlhf_pref.jsonl`（prompt + chosen/rejected）
+- `self_distill_prompts.jsonl`（prompt only）
+
+这样四种方法共享同一 source rows（或其子集），可比性最强。
+
+> 也就是说：你问“现有数据是否有社会偏见内容”，现在协议里已经加入 StereoSet 作为显式偏见来源。
+
+## 评测标准（已落实，非自创）
+
+- **Bias（至少 2 个）**：`BBQ`、`CrowS-Pairs`
+- **LLM 能力（至少 2 个）**：`MMLU`、`HellaSwag`
+
+## 单对模型评测（before vs after）
 
 ```bash
 python -m bias_dynamics.real_eval \
-  --before-model /path/to/base_model_or_hf_name \
-  --after-model /path/to/trained_model_or_hf_name \
-  --output-json outputs/eval/self_distill/before_after_eval.json \
-  --min-variants-per-category 50
+  --before-model meta-llama/Llama-3.1-8B-Instruct \
+  --after-model your-org/llama3.1-8b-sft-iter5 \
+  --output-json outputs/eval/sft_llama31.json \
+  --bias-tasks bbq,crows_pairs \
+  --capability-tasks mmlu,hellaswag \
+  --revision main
 ```
 
-输出会包含：
-- social bias：`sentiment_gap` / `toxicity_gap` / `stereotype_score` / `bias_score` / `category_bias`
-- capability：`perplexity` / `qa_accuracy` / `diversity_distinct_1` / `diversity_distinct_2`
-- 以及 `delta`（after - before）
-
-## 命令行覆盖参数（方便 SLURM）
-
-你可以临时覆盖配置里的关键参数（seed、iteration、method 等）：
+## 多模型/多方法批量评测
 
 ```bash
-python -m bias_dynamics.main \
-  --seed 42 \
-  --iterations 5 \
-  --runs-per-method 1 \
-  --methods self_distill \
-  run-all --config config/experiment_config.yaml --output-dir outputs/self_distill_seed42
+python -m bias_dynamics.eval_plan \
+  --plan config/standard_eval_plan.json \
+  --output-dir outputs/standard_benchmarks \
+  --revision main
 ```
 
-## 在 SLURM 上跑
-
-### 1) 批量提交实验（sbatch）
+## 依赖
 
 ```bash
-bash scripts/submit_bias_dynamics_jobs.sh
+pip install -e .[eval]
 ```
-
-脚本会按 `(experiment_type × method × seed)` 提交任务，日志在 `logs/`，输出在 `outputs/slurm/`。
-
-### 2) 单任务实验（srun）
-
-```bash
-# iterative
-bash scripts/run_bias_dynamics_srun.sh iterative self_distill 42
-
-# bias injection
-bash scripts/run_bias_dynamics_srun.sh bias_injection self_distill 42
-```
-
-### 3) 提交训练前后评测任务（sbatch）
-
-```bash
-bash scripts/eval_social_bias_slurm.sh /path/to/base_ckpt /path/to/after_ckpt self_distill
-```
-
-## 输出
-
-每轮训练都会输出统一 JSON 结构（包含 category-level social bias breakdown）：
-
-```json
-{
-  "method": "self_distill",
-  "iteration": 3,
-  "bias_score": 0.42,
-  "BAR": 1.8,
-  "toxicity_gap": 0.12,
-  "sentiment_gap": 0.09,
-  "category_bias": {
-    "gender": 0.40,
-    "race": 0.43,
-    "religion": 0.46,
-    "profession": 0.39
-  },
-  "perplexity": 15.2
-}
-```
-
-## 说明
-
-- 现有 `bias_dynamics.main` 仍是“模拟训练动力学”实验，用于快速迭代对比方法。
-- 新增 `bias_dynamics.real_eval` 用于真实 checkpoint 的“训练前后”偏见与能力评测。
