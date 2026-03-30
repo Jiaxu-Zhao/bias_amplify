@@ -1,0 +1,32 @@
+{
+  "sft": [
+    {
+      "name": "OpenAssistant/oasst1",
+      "split": "train",
+      "max_samples": 20000,
+      "rationale": "high-quality human annotations; moderate scale"
+    },
+    {
+      "name": "databricks/databricks-dolly-15k",
+      "split": "train",
+      "max_samples": 15000,
+      "rationale": "small clean instruction-following supplement"
+    }
+  ],
+  "preference": [
+    {
+      "name": "Anthropic/hh-rlhf",
+      "split": "train",
+      "max_samples": 30000,
+      "rationale": "helpful-harmless preference data for DPO/RLHF"
+    },
+    {
+      "name": "HuggingFaceH4/ultrafeedback_binarized",
+      "split": "train_prefs",
+      "max_samples": 30000,
+      "rationale": "high-quality binarized preferences"
+    }
+  ],
+  "eval_bias": ["bbq", "crows_pairs"],
+  "eval_capability": ["mmlu", "hellaswag"]
+}

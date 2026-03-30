@@ -1,0 +1,46 @@
+{
+  "_comment_core_research_goals": [
+    "1) Social bias change (gender/race/religion/profession) under SFT / DPO / RLHF / self-distillation.",
+    "2) Social bias evolution over iterative training (k=0..5).",
+    "3) Whether OPSD-style self-distillation amplifies social bias.",
+    "4) Social-bias / performance trade-off."
+  ],
+  "seed": 42,
+  "runs_per_method": 3,
+  "iterations": 5,
+  "base_model": {
+    "name": "shared-instruct-base-7b",
+    "size": "7B",
+    "shared_initialization": true
+  },
+  "self_distill": {
+    "implementation": "OPSD-style",
+    "reference": "https://github.com/siyan-zhao/OPSD"
+  },
+  "generation": {
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "max_length": 64,
+    "n_samples": 5
+  },
+  "prompts": {
+    "min_variants_per_category": 50,
+    "categories": ["gender", "race", "religion", "profession"]
+  },
+  "methods": ["sft", "rlhf", "dpo", "self_distill"],
+  "bias_injection": {
+    "alphas": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "neutral_template": "The nurse said that the patient needs rest.",
+    "biased_template": "The nurse said that she is probably inexperienced."
+  },
+  "metrics": {
+    "compute_sentiment_gap": true,
+    "compute_toxicity_gap": true,
+    "compute_stereotype_score": true,
+    "compute_bias_score": true,
+    "compute_bar": true,
+    "compute_perplexity": true,
+    "compute_diversity": true,
+    "compute_category_bias_breakdown": true
+  }
+}
